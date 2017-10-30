@@ -26,8 +26,6 @@ byte destination = 0xFF;      // destination to send to
 long lastSendTime = 0;        // last send time
 int interval = 2000;          // interval between sends
 
-volatile bool doRead = false; // Flag set by callback to perform read process in main loop
-
 void setup() {
   Serial.begin(9600);                   // initialize serial
   while (!Serial);
@@ -48,13 +46,6 @@ void setup() {
 }
 
 void loop() {
-
-  // If ISR set the flag, perform read operations
-  if (doRead) {
-    readMessage();
-    doRead = false; // Set flag back to false so next read will happen only after next ISR event
-  }
-
   if (millis() - lastSendTime > interval) {
     String message = "HeLoRa World!";   // send a message
     sendMessage(message);
@@ -65,7 +56,20 @@ void loop() {
   }
 }
 
-void readMessage() {
+void sendMessage(String outgoing) {
+  LoRa.beginPacket();                   // start packet
+  LoRa.write(destination);              // add destination address
+  LoRa.write(localAddress);             // add sender address
+  LoRa.write(msgCount);                 // add message ID
+  LoRa.write(outgoing.length());        // add payload length
+  LoRa.print(outgoing);                 // add payload
+  LoRa.endPacket();                     // finish packet and send it
+  msgCount++;                           // increment message ID
+}
+
+void onReceive(int packetSize) {
+  if (packetSize == 0) return;          // if there's no packet, return
+
   // read packet header bytes:
   int recipient = LoRa.read();          // recipient address
   byte sender = LoRa.read();            // sender address
@@ -98,22 +102,5 @@ void readMessage() {
   Serial.println("RSSI: " + String(LoRa.packetRssi()));
   Serial.println("Snr: " + String(LoRa.packetSnr()));
   Serial.println();
-}
-
-void sendMessage(String outgoing) {
-  LoRa.beginPacket();                   // start packet
-  LoRa.write(destination);              // add destination address
-  LoRa.write(localAddress);             // add sender address
-  LoRa.write(msgCount);                 // add message ID
-  LoRa.write(outgoing.length());        // add payload length
-  LoRa.print(outgoing);                 // add payload
-  LoRa.endPacket();                     // finish packet and send it
-  msgCount++;                           // increment message ID
-}
-
-void onReceive(int packetSize) {
-  if (packetSize == 0) return;          // if there's no packet, return
-
-  doRead = true;                        //Set flag to perform read in main loop
 }
 
